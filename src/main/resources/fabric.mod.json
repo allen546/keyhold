@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "keyhold",
+  "version": "${version}",
+  "name": "KeyHold",
+  "description": "Hold any key down while the module is active.",
+  "authors": ["allen546"],
+  "environment": "client",
+  "entrypoints": {
+    "meteor": [
+      "com.you.keyhold.KeyHoldAddon"
+    ]
+  },
+  "mixins": [
+    "keyhold.mixins.json"
+  ],
+  "depends": {
+    "java": ">=${jdk_version}",
+    "minecraft": "~${minecraft_version}",
+    "meteor-client": "*"
+  }
+}

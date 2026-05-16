@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="key" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e94560"/>
+      <stop offset="100%" style="stop-color:#c81d4e"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" ry="20" fill="url(#bg)"/>
+
+  <!-- Key head (circle) -->
+  <circle cx="48" cy="48" r="20" fill="none" stroke="url(#key)" stroke-width="5" filter="url(#glow)"/>
+  <circle cx="48" cy="48" r="10" fill="url(#key)" opacity="0.3"/>
+
+  <!-- Key shaft -->
+  <rect x="66" y="44" width="40" height="8" rx="2" fill="url(#key)" filter="url(#glow)"/>
+
+  <!-- Key teeth -->
+  <rect x="86" y="52" width="6" height="10" rx="1" fill="url(#key)" filter="url(#glow)"/>
+  <rect x="96" y="52" width="6" height="14" rx="1" fill="url(#key)" filter="url(#glow)"/>
+
+  <!-- Finger/hold indicator (arrow pointing down) -->
+  <path d="M64 80 L64 105 M54 95 L64 105 L74 95" stroke="url(#key)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)"/>
+
+  <!-- "HOLD" text -->
+  <text x="64" y="120" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#e94560" text-anchor="middle" opacity="0.8">HOLD</text>
+</svg>
