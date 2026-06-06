@@ -60,6 +60,8 @@ public class KeyHold extends Module {
     @Override
     public void onActivate() {
         trackedBindings.clear();
+        attackTickCounter = 0;
+        needsAttackRelease = false;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc == null || mc.player == null) return;
         originalInput = mc.player.input;
@@ -74,8 +76,11 @@ public class KeyHold extends Module {
             kb.setPressed(false);
         }
         trackedBindings.clear();
+        attackTickCounter = 0;
+        needsAttackRelease = false;
 
         if (holdLeft.get()) mc.options.attackKey.setPressed(false);
+        if (periodicEnabled.get() && !holdLeft.get()) mc.options.attackKey.setPressed(false);
         if (holdRight.get()) mc.options.useKey.setPressed(false);
         if (holdMiddle.get()) mc.options.pickItemKey.setPressed(false);
 
@@ -99,7 +104,22 @@ public class KeyHold extends Module {
             kb.setPressed(true);
         }
 
-        if (holdLeft.get()) mc.options.attackKey.setPressed(true);
+        if (needsAttackRelease) {
+            mc.options.attackKey.setPressed(false);
+            needsAttackRelease = false;
+        }
+
+        if (periodicEnabled.get() && !holdLeft.get()) {
+            attackTickCounter++;
+            if (attackTickCounter >= periodicInterval.get()) {
+                attackTickCounter = 0;
+                mc.options.attackKey.setPressed(true);
+                needsAttackRelease = true;
+            }
+        } else if (holdLeft.get()) {
+            mc.options.attackKey.setPressed(true);
+        }
+
         if (holdRight.get()) mc.options.useKey.setPressed(true);
         if (holdMiddle.get()) mc.options.pickItemKey.setPressed(true);
 
