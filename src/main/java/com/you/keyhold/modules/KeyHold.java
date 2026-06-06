@@ -16,6 +16,7 @@ import java.util.List;
 public class KeyHold extends Module {
     private final SettingGroup sgKeys = this.settings.createGroup("Keys");
     private final SettingGroup sgMouse = this.settings.createGroup("Mouse");
+    private final SettingGroup sgPeriodic = this.settings.createGroup("Periodic Attack");
 
     private final Setting<Keybind> key1 = sgKeys.add(new KeybindSetting.Builder()
         .name("key-1").description("First key to hold down.").defaultValue(Keybind.none()).build()
@@ -40,8 +41,17 @@ public class KeyHold extends Module {
         .name("hold-middle").description("Hold middle click.").defaultValue(false).build()
     );
 
+    private final Setting<Boolean> periodicEnabled = sgPeriodic.add(new BoolSetting.Builder()
+        .name("periodic-attack").description("Click attack once per interval instead of holding.").defaultValue(false).build()
+    );
+    private final Setting<Integer> periodicInterval = sgPeriodic.add(new IntSetting.Builder()
+        .name("attack-interval").description("Attack interval in ticks (1 tick = 50ms).").defaultValue(13).min(1).max(200).sliderMax(200).build()
+    );
+
     private final List<KeyBinding> trackedBindings = new ArrayList<>();
     private Input originalInput;
+    private int attackTickCounter = 0;
+    private boolean needsAttackRelease = false;
 
     public KeyHold() {
         super(KeyHoldAddon.CATEGORY, "key-hold", "Holds down selected keys and mouse buttons continuously.");
