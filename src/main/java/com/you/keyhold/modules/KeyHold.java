@@ -10,6 +10,12 @@ import net.minecraft.client.input.Input;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.EntityHitResult;
+import net.minecraft.util.hit.HitResult;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,7 +57,6 @@ public class KeyHold extends Module {
     private final List<KeyBinding> trackedBindings = new ArrayList<>();
     private Input originalInput;
     private int attackTickCounter = 0;
-    private boolean needsAttackRelease = false;
 
     public KeyHold() {
         super(KeyHoldAddon.CATEGORY, "key-hold", "Holds down selected keys and mouse buttons continuously.");
@@ -61,7 +66,6 @@ public class KeyHold extends Module {
     public void onActivate() {
         trackedBindings.clear();
         attackTickCounter = 0;
-        needsAttackRelease = false;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc == null || mc.player == null) return;
         originalInput = mc.player.input;
@@ -77,10 +81,8 @@ public class KeyHold extends Module {
         }
         trackedBindings.clear();
         attackTickCounter = 0;
-        needsAttackRelease = false;
 
         if (holdLeft.get()) mc.options.attackKey.setPressed(false);
-        if (periodicEnabled.get() && !holdLeft.get()) mc.options.attackKey.setPressed(false);
         if (holdRight.get()) mc.options.useKey.setPressed(false);
         if (holdMiddle.get()) mc.options.pickItemKey.setPressed(false);
 
@@ -104,17 +106,11 @@ public class KeyHold extends Module {
             kb.setPressed(true);
         }
 
-        if (needsAttackRelease) {
-            mc.options.attackKey.setPressed(false);
-            needsAttackRelease = false;
-        }
-
         if (periodicEnabled.get() && !holdLeft.get()) {
             attackTickCounter++;
             if (attackTickCounter >= periodicInterval.get()) {
                 attackTickCounter = 0;
-                mc.options.attackKey.setPressed(true);
-                needsAttackRelease = true;
+                performPeriodicAttack(mc);
             }
         } else if (holdLeft.get()) {
             mc.options.attackKey.setPressed(true);
@@ -127,6 +123,17 @@ public class KeyHold extends Module {
             mc.player.input = new HoldPlayerInput(mc);
         }
         mc.player.input.tick();
+    }
+
+    private void performPeriodicAttack(MinecraftClient mc) {
+        if (mc.player == null || mc.crosshairTarget == null) return;
+        if (mc.crosshairTarget.getType() != HitResult.Type.ENTITY) return;
+
+        Entity target = ((EntityHitResult) mc.crosshairTarget).getEntity();
+        if (target == null) return;
+
+        mc.interactionManager.attackEntity(mc.player, target);
+        mc.player.swingHand(Hand.MAIN_HAND);
     }
 
     private void collectBindings(MinecraftClient mc, Keybind keybind) {
