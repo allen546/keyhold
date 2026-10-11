@@ -10,6 +10,7 @@ A Meteor Client addon that holds down user-selected keyboard keys and mouse butt
 - **Gameplay actions** — attack, use, interact, place, block breaking all work
 - **No key reassignment** — uses your existing keybindings
 - **Periodic attack** — configurable attack interval in ticks (1–200)
+- **Periodic use** — configurable use interval in ticks (1–40), works in GUIs
 
 ## Requirements
 

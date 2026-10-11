@@ -1,20 +1,20 @@
 package com.you.keyhold.modules;
 
-import com.you.keyhold.HoldPlayerInput;
 import com.you.keyhold.KeyHoldAddon;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.misc.Keybind;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.input.Input;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +23,7 @@ public class KeyHold extends Module {
     private final SettingGroup sgKeys = this.settings.createGroup("Keys");
     private final SettingGroup sgMouse = this.settings.createGroup("Mouse");
     private final SettingGroup sgPeriodic = this.settings.createGroup("Periodic Attack");
+    private final SettingGroup sgPeriodicUse = this.settings.createGroup("Periodic Use");
 
     private final Setting<Keybind> key1 = sgKeys.add(new KeybindSetting.Builder()
         .name("key-1").description("First key to hold down.").defaultValue(Keybind.none()).build()
@@ -54,9 +55,16 @@ public class KeyHold extends Module {
         .name("attack-interval").description("Attack interval in ticks (1 tick = 50ms).").defaultValue(13).min(1).max(200).sliderMax(200).build()
     );
 
+    private final Setting<Boolean> periodicUseEnabled = sgPeriodicUse.add(new BoolSetting.Builder()
+        .name("periodic-use").description("Click use once per interval instead of holding.").defaultValue(false).build()
+    );
+    private final Setting<Integer> useInterval = sgPeriodicUse.add(new IntSetting.Builder()
+        .name("use-interval").description("Use interval in ticks (1 tick = 50ms).").defaultValue(13).min(1).max(40).sliderMax(40).build()
+    );
+
     private final List<KeyBinding> trackedBindings = new ArrayList<>();
-    private Input originalInput;
     private int attackTickCounter = 0;
+    private int useTickCounter = 0;
 
     public KeyHold() {
         super(KeyHoldAddon.CATEGORY, "key-hold", "Holds down selected keys and mouse buttons continuously.");
@@ -66,9 +74,7 @@ public class KeyHold extends Module {
     public void onActivate() {
         trackedBindings.clear();
         attackTickCounter = 0;
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.player == null) return;
-        originalInput = mc.player.input;
+        useTickCounter = 0;
     }
 
     @Override
@@ -78,18 +84,33 @@ public class KeyHold extends Module {
 
         for (KeyBinding kb : trackedBindings) {
             kb.setPressed(false);
+            drainTimesPressed(kb);
         }
         trackedBindings.clear();
         attackTickCounter = 0;
+        useTickCounter = 0;
 
-        if (holdLeft.get()) mc.options.attackKey.setPressed(false);
-        if (holdRight.get()) mc.options.useKey.setPressed(false);
-        if (holdMiddle.get()) mc.options.pickItemKey.setPressed(false);
+        // Always release mouse keys unconditionally — settings may have changed while active
+        mc.options.attackKey.setPressed(false);
+        mc.options.useKey.setPressed(false);
+        mc.options.pickItemKey.setPressed(false);
+        drainTimesPressed(mc.options.attackKey);
+        drainTimesPressed(mc.options.useKey);
+        drainTimesPressed(mc.options.pickItemKey);
 
-        if (mc.player != null && originalInput != null) {
-            mc.player.input = originalInput;
-            originalInput = null;
-        }
+        // No player.input restore needed — we never replace it anymore.
+    }
+
+    /**
+     * Drains the KeyBinding's internal timesPressed counter so no phantom
+     * "wasPressed" events fire in the tick after we release the key.
+     * setPressed(false) only clears the 'held' boolean; GLFW callbacks may
+     * have incremented timesPressed independently, which Minecraft consumes
+     * via wasPressed() and treats as fresh key taps even after we let go.
+     */
+    private static void drainTimesPressed(KeyBinding kb) {
+        //noinspection StatementWithEmptyBody
+        while (kb.wasPressed()) { /* discard */ }
     }
 
     public void holdTick(MinecraftClient mc) {
@@ -116,17 +137,25 @@ public class KeyHold extends Module {
             mc.options.attackKey.setPressed(true);
         }
 
-        if (holdRight.get()) mc.options.useKey.setPressed(true);
+        if (periodicUseEnabled.get() && !holdRight.get()) {
+            useTickCounter++;
+            if (useTickCounter >= useInterval.get()) {
+                useTickCounter = 0;
+                performPeriodicUse(mc);
+            }
+        } else if (holdRight.get()) {
+            mc.options.useKey.setPressed(true);
+        }
         if (holdMiddle.get()) mc.options.pickItemKey.setPressed(true);
 
-        if (!(mc.player.input instanceof HoldPlayerInput)) {
-            mc.player.input = new HoldPlayerInput(mc);
-        }
-        mc.player.input.tick();
+        // No need to replace mc.player.input — vanilla's KeyboardInput.tick() already
+        // reads isPressed() from the KeyBinding objects we set above, so movement keys
+        // held via setPressed(true) work through the normal input path.
     }
 
     private void performPeriodicAttack(MinecraftClient mc) {
         if (mc.player == null || mc.crosshairTarget == null) return;
+        if (mc.player.isUsingItem()) return;
         if (mc.crosshairTarget.getType() != HitResult.Type.ENTITY) return;
 
         Entity target = ((EntityHitResult) mc.crosshairTarget).getEntity();
@@ -134,6 +163,22 @@ public class KeyHold extends Module {
 
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
+    }
+
+    private void performPeriodicUse(MinecraftClient mc) {
+        if (mc.player == null || mc.interactionManager == null) return;
+
+        HitResult hit = mc.crosshairTarget;
+        if (hit == null && mc.player != null) {
+            hit = mc.player.raycast(5.0, 1.0F, false);
+        }
+
+        if (hit != null && hit.getType() == HitResult.Type.BLOCK && !mc.options.sneakKey.isPressed()) {
+            net.minecraft.util.ActionResult blockResult = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, (BlockHitResult) hit);
+            if (blockResult.isAccepted()) return;
+        }
+
+        mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
     }
 
     private void collectBindings(MinecraftClient mc, Keybind keybind) {
@@ -144,7 +189,8 @@ public class KeyHold extends Module {
             : InputUtil.Type.MOUSE.createFromCode(keybind.getValue());
 
         for (KeyBinding kb : mc.options.allKeys) {
-            if (kb.getDefaultKey().equals(targetKey)) {
+            // Use getBoundKey() (the player's current binding) not getDefaultKey()
+            if (((com.you.keyhold.mixin.KeyBindingAccessor) kb).getBoundKey().equals(targetKey)) {
                 trackedBindings.add(kb);
             }
         }
